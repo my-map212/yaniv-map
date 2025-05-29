@@ -1,26 +1,132 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>OpenStreetMap Example</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Map with Closest Shelter Route</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+/>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
+/>
 
-  <style>
-    #map { height: 100vh; margin: 0; padding: 0; }
-    body, html { margin: 0; padding: 0; height: 100%; }
-  </style>
+<style>
+  html,
+  body,
+  #map {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+</style>
 </head>
 <body>
-  <div id="map"></div>
-  <script>
-    var map = L.map('map').setView([32.0853, 34.7818], 13); // תל אביב לדוגמה
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-  </script>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+
+<script>
+// רשימת מקלטים (דוגמה) - תעדכן לפי הצורך
+const shelters = [
+  { name: "מקלט א'", coords: [32.0853, 34.7818] }, // תל אביב
+  { name: "מקלט ב'", coords: [32.0897, 34.7994] }, // תל אביב
+  { name: "מקלט ג'", coords: [32.0701, 34.7939] }, // תל אביב
+];
+
+// יצירת מפה (תל אביב מרכז)
+const map = L.map("map").setView([32.0853, 34.7818], 13);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors",
+  maxZoom: 19,
+}).addTo(map);
+
+// הוספת סמן לכל המקלטים
+shelters.forEach((shelter) => {
+  L.marker(shelter.coords)
+    .addTo(map)
+    .bindPopup(shelter.name);
+});
+
+// פונקציה לחישוב מרחק בין שתי נקודות (Haversine formula)
+function getDistance(lat1, lon1, lat2, lon2) {
+  function toRad(x) {
+    return (x * Math.PI) / 180;
+  }
+  const R = 6371; // רדיוס כדור הארץ בק"מ
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  return d;
+}
+
+// בקשת מיקום מהמשתמש
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const userLat = position.coords.latitude;
+      const userLon = position.coords.longitude;
+
+      // הוספת סמן קטן למיקום המשתמש
+      const userMarker = L.circleMarker([userLat, userLon], {
+        radius: 7,
+        color: "blue",
+        fillColor: "#30f",
+        fillOpacity: 0.8,
+      })
+        .addTo(map)
+        .bindPopup("המיקום שלך")
+        .openPopup();
+
+      map.setView([userLat, userLon], 14);
+
+      // מציאת המקלט הקרוב ביותר
+      let closestShelter = null;
+      let minDistance = Infinity;
+
+      shelters.forEach((shelter) => {
+        const dist = getDistance(
+          userLat,
+          userLon,
+          shelter.coords[0],
+          shelter.coords[1]
+        );
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestShelter = shelter;
+        }
+      });
+
+      if (closestShelter) {
+        // הוספת מסלול בין המשתמש למקלט הקרוב
+        L.Routing.control({
+          waypoints: [L.latLng(userLat, userLon), L.latLng(...closestShelter.coords)],
+          routeWhileDragging: false,
+          showAlternatives: false,
+          draggableWaypoints: false,
+          addWaypoints: false,
+        }).addTo(map);
+      }
+    },
+    (error) => {
+      alert("לא ניתן לקבל את מיקום המשתמש: " + error.message);
+    }
+  );
+} else {
+  alert("דפדפן זה אינו תומך ב-GPS.");
+}
+</script>
 </body>
 </html>
